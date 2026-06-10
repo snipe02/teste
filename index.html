@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Câmera de Trilha | Compartilhamento Ao Vivo (4 Celulares)</title>
+    <!-- PeerJS CDN para conexões WebRTC -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none; /* Evita seleção acidental em telas touch */
+        }
+
+        body {
+            background: linear-gradient(145deg, #2a2418 0%, #1e1a12 100%);
+            font-family: 'Segoe UI', 'Courier New', 'Roboto', monospace;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Container principal estilo "câmera de trilha" - rústico */
+        .trail-container {
+            max-width: 1400px;
+            width: 100%;
+            background: #3a2e22;
+            background-image: repeating-linear-gradient(45deg, #4a3a2a 1px, #2e241a 2px, #3a2e22 8px);
+            border-radius: 48px;
+            box-shadow: 0 20px 35px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,200,0.1);
+            padding: 20px;
+            border: 8px solid #5c4a32;
+            outline: 2px solid #b87c4a;
+            outline-offset: 4px;
+        }
+
+        /* cabeçalho com efeito militar/natureza */
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+            background: #1f1a10c9;
+            backdrop-filter: blur(4px);
+            border-radius: 60px;
+            padding: 12px 20px;
+            border: 1px solid #c9a87b;
+        }
+
+        .header h1 {
+            font-size: 1.9rem;
+            letter-spacing: 4px;
+            color: #efdbc1;
+            text-shadow: 3px 3px 0 #4a2c1a;
+            font-weight: 800;
+            word-break: keep-all;
+        }
+
+        .header p {
+            color: #dbbc8c;
+            font-weight: bold;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            margin-top: 6px;
+        }
+
+        /* Grid 2 colunas responsivo */
+        .dashboard {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 25px;
+        }
+
+        /* Cards que representam visor e controle */
+        .card {
+            flex: 1;
+            min-width: 280px;
+            background: #2b221ae0;
+            backdrop-filter: blur(2px);
+            border-radius: 32px;
+            padding: 20px;
+            box-shadow: inset 0 0 0 1px rgba(255,245,200,0.2), 0 12px 25px rgba(0,0,0,0.3);
+            border: 1px solid #b48b54;
+        }
+
+        .card h2 {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.5rem;
+            color: #ffe0b5;
+            border-left: 5px solid #ffa559;
+            padding-left: 15px;
+            margin-bottom: 18px;
+            font-family: monospace;
+        }
+
+        .video-area {
+            background: #0a0703;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 8px 18px black;
+            margin-bottom: 20px;
+            position: relative;
+            aspect-ratio: 16 / 9;
+            background-image: radial-gradient(circle at 30% 40%, rgba(0,0,0,0.6) 2%, transparent 2.5%);
+            background-size: 28px 28px;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            background: #000;
+        }
+
+        .placeholder-video {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #1b1a16;
+            color: #b99e73;
+            font-size: 1rem;
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 20px 0 15px;
+        }
+
+        button {
+            background: #4c3824;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 60px;
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #f8efdb;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 3px 0 #2b1e12;
+            flex: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        button:active {
+            transform: translateY(2px);
+            box-shadow: 0 1px 0 #2b1e12;
+        }
+
+        button.cam-action {
+            background: #6d532e;
+            color: white;
+            border-bottom: 3px solid #ffbc6e;
+        }
+
+        button.stop-action {
+            background: #5e3a2a;
+            border-bottom: 3px solid #b55b3c;
+        }
+
+        .info-badge {
+            background: #0e0b07;
+            border-radius: 30px;
+            padding: 10px 15px;
+            margin-top: 12px;
+            font-size: 0.85rem;
+            color: #ffd29b;
+            font-weight: bold;
+            text-align: center;
+            word-break: break-all;
+            border: 1px solid #cd9f5a;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 8px;
+            margin: 15px 0;
+        }
+
+        .input-group input {
+            flex: 3;
+            background: #1f1b12;
+            border: 1px solid #b5915a;
+            padding: 12px;
+            border-radius: 60px;
+            color: #ffefcf;
+            font-family: monospace;
+            font-weight: bold;
+            text-align: center;
+            outline: none;
+        }
+
+        .counter {
+            font-size: 1.2rem;
+            font-weight: bold;
+            background: #010101b3;
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 50px;
+            margin-left: 10px;
+        }
+
+        .status-led {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #6f6f6f;
+            box-shadow: 0 0 3px white;
+            margin-right: 8px;
+        }
+
+        .led-green {
+            background-color: #3eff6e;
+            box-shadow: 0 0 6px #00ff80;
+        }
+
+        .led-red {
+            background-color: #ff4f4f;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 25px;
+            font-size: 0.7rem;
+            color: #b69462;
+            border-top: 1px dashed #6f543a;
+            padding-top: 15px;
+        }
+
+        @media (max-width: 760px) {
+            .dashboard {
+                flex-direction: column;
+            }
+            .header h1 {
+                font-size: 1.4rem;
+            }
+            button {
+                padding: 8px 12px;
+                font-size: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="trail-container">
+    <div class="header">
+        <h1>📡 CÂMERA DE TRILHA</h1>
+        <p>🔴 Transmissão ao vivo | Câmera TRASEIRA | Até 4 dispositivos simultâneos</p>
+    </div>
+
+    <div class="dashboard">
+        <!-- LADO ESQUERDO: MODO TRANSMISSOR (Câmera que envia) -->
+        <div class="card">
+            <h2>🎥 TRANSMISSOR <span style="font-size:0.9rem;">(câmera traseira)</span></h2>
+            <div class="video-area" id="transmitterVideoArea">
+                <video id="localVideo" autoplay muted playsinline></video>
+                <div id="localPlaceholder" class="placeholder-video" style="display: flex;">⚙️ Aguardando câmera...<br>Clique em "INICIAR CÂMERA TRASEIRA"</div>
+            </div>
+            <div class="controls">
+                <button id="startCameraBtn" class="cam-action">📷 INICIAR CÂM. TRASEIRA</button>
+                <button id="stopCameraBtn" class="stop-action">⏹️ PARAR CÂMERA</button>
+            </div>
+            <div class="info-badge" id="broadcastInfo">
+                🔒 Status: <span id="camStatus">Desligada</span>
+            </div>
+            <div class="info-badge" id="peerIdContainer" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>🆔 CÓDIGO DE ACESSO:</span>
+                <strong id="peerIdDisplay">---------</strong>
+                <button id="copyIdBtn" style="background:#6f4e2e; padding: 5px 12px; font-size:0.7rem; flex:0;">📋 Copiar</button>
+            </div>
+            <div class="info-badge">
+                <span>👥 ESPECTADORES CONECTADOS: </span>
+                <span id="viewerCounter" class="counter">0</span>
+                <span style="font-size:0.7rem;"> / 4 (máx)</span>
+                <div style="font-size: 0.7rem; margin-top:5px;">⚡ Compartilhe o código com até 4 celulares</div>
+            </div>
+        </div>
+
+        <!-- LADO DIREITO: MODO ESPECTADOR (assistir a transmissão) -->
+        <div class="card">
+            <h2>📱 ESPECTADOR <span style="font-size:0.9rem;">(até 4 views)</span></h2>
+            <div class="video-area" id="viewerVideoArea">
+                <video id="remoteVideo" autoplay playsinline></video>
+                <div id="remotePlaceholder" class="placeholder-video" style="display: flex;">🔍 Digite o código do transmissor<br>e clique em "ASSISTIR AO VIVO"</div>
+            </div>
+            <div class="input-group">
+                <input type="text" id="peerCodeInput" placeholder="Cole o código da câmera..." autocomplete="off">
+                <button id="connectBtn" class="cam-action">🔗 ASSISTIR AO VIVO</button>
+            </div>
+            <button id="disconnectViewBtn" class="stop-action" style="background:#5a3a28;">⏹️ PARAR VISUALIZAÇÃO</button>
+            <div class="info-badge" id="viewerInfo">
+                🟡 Status: Desconectado
+            </div>
+            <div class="info-badge" style="margin-top: 10px;">
+                💡 Dica: A câmera principal (traseira) deve estar ativa no TRANSMISSOR.
+            </div>
+        </div>
+    </div>
+    <footer>
+        🌲 Câmera de Trilha | Compartilhamento P2P WebRTC | Use em até 4 celulares simultâneos | Câmera traseira em tempo real
+    </footer>
+</div>
+
+<script>
+    // ---------------------- ELEMENTOS DOM --------------------------
+    // Transmissor
+    const localVideo = document.getElementById('localVideo');
+    const localPlaceholder = document.getElementById('localPlaceholder');
+    const startBtn = document.getElementById('startCameraBtn');
+    const stopCamBtn = document.getElementById('stopCameraBtn');
+    const camStatusSpan = document.getElementById('camStatus');
+    const peerIdDisplay = document.getElementById('peerIdDisplay');
+    const copyIdBtn = document.getElementById('copyIdBtn');
+    const viewerCounterSpan = document.getElementById('viewerCounter');
+
+    // Espectador
+    const remoteVideo = document.getElementById('remoteVideo');
+    const remotePlaceholder = document.getElementById('remotePlaceholder');
+    const peerCodeInput = document.getElementById('peerCodeInput');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectViewBtn = document.getElementById('disconnectViewBtn');
+    const viewerInfoSpan = document.getElementById('viewerInfo');
+
+    // Variáveis globais - Transmissor
+    let localStream = null;           // Stream da câmera traseira
+    let peerTransmitter = null;       // Instância PeerJS (lado transmissor)
+    let currentPeerId = null;         // ID gerado para o transmissor
+    let activeCalls = new Map();       // Armazena conexões (call) para controle de espectadores
+    let maxViewers = 4;
+
+    // Variáveis globais - Espectador
+    let peerViewer = null;             // Peer do espectador (para conectar)
+    let activeCallFromViewer = null;   // Call atual
+    let remoteStreamActive = false;
+
+    // ---------------------- FUNÇÕES AUXILIARES --------------------------
+    function updateCamStatus(text, isActive) {
+        camStatusSpan.innerHTML = text;
+        if (isActive) {
+            camStatusSpan.style.color = "#aaffaa";
+        } else {
+            camStatusSpan.style.color = "#ffae70";
+        }
+    }
+
+    // Atualizar contador de espectadores e UI do transmissor
+    function updateViewerCountUI() {
+        const count = activeCalls.size;
+        viewerCounterSpan.innerText = count;
+        if (count >= maxViewers) {
+            viewerCounterSpan.style.color = "#ffaa66";
+        } else {
+            viewerCounterSpan.style.color = "#ffe0b5";
+        }
+    }
+
+    // Fechar todas as chamadas ativas (desconectar espectadores)
+    function closeAllViewerCalls() {
+        for (let [callId, callObj] of activeCalls.entries()) {
+            try {
+                if (callObj && callObj.close) callObj.close();
+            } catch(e) { console.warn(e); }
+        }
+        activeCalls.clear();
+        updateViewerCountUI();
+    }
+
+    // Para o stream local e encerra transmissor
+    async function stopLocalCameraAndBroadcast() {
+        // Fechar todas as chamadas ativas
+        closeAllViewerCalls();
+        
+        // Parar tracks de stream local
+        if (localStream) {
+            localStream.getTracks().forEach(track => {
+                if (track.readyState === 'live') track.stop();
+            });
+            localStream = null;
+        }
+        localVideo.srcObject = null;
+        localVideo.style.display = "none";
+        localPlaceholder.style.display = "flex";
+        updateCamStatus("Desligada", false);
+        
+        // Destruir peer do transmissor se existir
+        if (peerTransmitter) {
+            peerTransmitter.destroy();
+            peerTransmitter = null;
+        }
+        currentPeerId = null;
+        peerIdDisplay.innerText = "---------";
+        document.getElementById('peerIdContainer').style.opacity = "0.7";
+        copyIdBtn.disabled = true;
+        copyIdBtn.style.opacity = "0.5";
+    }
+
+    // Iniciar câmera traseira + criar peer (transmissor)
+    async function startTrailCamera() {
+        if (localStream) {
+            // Se já está ativo, primeiro para
+            await stopLocalCameraAndBroadcast();
+        }
+        
+        // 1. Solicitar acesso à câmera TRASEIRA (environment)
+        let constraints = {
+            video: { facingMode: { exact: "environment" } },  // força traseira
+            audio: false  // câmera de trilha normalmente sem áudio
+        };
+        
+        // Fallback: se falhar, tenta qualquer câmera (mas prioriza traseira)
+        let stream = null;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (err) {
+            console.warn("Câmera traseira específica falhou, tentando padrão:", err);
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                alert("⚠️ Não foi possível acessar a câmera traseira específica. Usando câmera padrão. Verifique permissões.");
+            } catch (fallbackErr) {
+                alert("�ERRO: Sem acesso à câmera. Verifique permissões e conexão HTTPS.");
+                updateCamStatus("Sem Acesso", false);
+                return;
+            }
+        }
+        
+        localStream = stream;
+        localVideo.srcObject = localStream;
+        localVideo.style.display = "block";
+        localPlaceholder.style.display = "none";
+        updateCamStatus("Transmitindo (Traseira)", true);
+        
+        // 2. Criar peer do transmissor (usando servidor público PeerJS Cloud)
+        // Gera ID aleatório único para esta sessão
+        const randomId = "trailcam_" + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+        peerTransmitter = new Peer(randomId, {
+            host: '0.peerjs.com',
+            port: 443,
+            path: '/',
+            secure: true,
+            config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+        });
+        
+        peerTransmitter.on('open', (id) => {
+            currentPeerId = id;
+            peerIdDisplay.innerText = id;
+            document.getElementById('peerIdContainer').style.opacity = "1";
+            copyIdBtn.disabled = false;
+            copyIdBtn.style.opacity = "1";
+            console.log("📡 Transmissor ativo, ID:", id);
+        });
+        
+        // Quando um espectador chamar (call recebida)
+        peerTransmitter.on('call', (call) => {
+            // Verifica limite de espectadores
+            if (activeCalls.size >= maxViewers) {
+                console.warn("Limite de 4 espectadores atingido. Chamada rejeitada.");
+                // Recusar chamada: simplesmente fechar
+                call.close();
+                return;
+            }
+            
+            if (!localStream) {
+                console.error("Sem stream local para enviar.");
+                call.close();
+                return;
+            }
+            
+            // Atende a chamada enviando o stream da câmera traseira
+            call.answer(localStream);
+            // Guarda a call para controle
+            activeCalls.set(call.peer, call);
+            updateViewerCountUI();
+            
+            // Quando espectador desconectar
+            call.on('close', () => {
+                if (activeCalls.has(call.peer)) {
+                    activeCalls.delete(call.peer);
+                    updateViewerCountUI();
+                    console.log(`Espectador ${call.peer} desconectou.`);
+                }
+            });
+            
+            call.on('error', (err) => {
+                console.error("Erro na call:", err);
+                if (activeCalls.has(call.peer)) {
+                    activeCalls.delete(call.peer);
+                    updateViewerCountUI();
+                }
+            });
+        });
+        
+        peerTransmitter.on('error', (err) => {
+            console.error("Erro no peer transmissor:", err);
+            if (err.type === 'peer-unavailable') {
+                // pode ocorrer normalmente
+            } else {
+                alert("Erro de conexão. Recarregue a página e tente novamente.");
+                stopLocalCameraAndBroadcast();
+            }
+        });
+        
+        peerTransmitter.on('disconnected', () => {
+            console.log("Peer transmissor desconectado do servidor. Tentando reconectar...");
+            if (peerTransmitter && !peerTransmitter.destroyed) {
+                peerTransmitter.reconnect();
+            }
+        });
+        
+        // Limpeza quando fechar
+        peerTransmitter.on('close', () => {
+            closeAllViewerCalls();
+        });
+    }
+    
+    // ---------------------- ESPECTADOR (conectar e assistir) ----------------------
+    async function connectToCamera(transmitterId) {
+        if (!transmitterId || transmitterId.trim() === "") {
+            alert("Digite um código de câmera válido.");
+            return;
+        }
+        transmitterId = transmitterId.trim();
+        
+        // Desconectar visualização atual se existir
+        disconnectViewer();
+        
+        // Criar novo peer para espectador (ID aleatório)
+        if (peerViewer && !peerViewer.destroyed) {
+            peerViewer.destroy();
+        }
+        
+        const viewerRandomId = "viewer_" + Math.random().toString(36).substring(2, 8);
+        peerViewer = new Peer(viewerRandomId, {
+            host: '0.peerjs.com',
+            port: 443,
+            path: '/',
+            secure: true,
+            config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+        });
+        
+        peerViewer.on('open', () => {
+            console.log("Espectador peer pronto, conectando a:", transmitterId);
+            // Iniciar chamada para o transmissor
+            const call = peerViewer.call(transmitterId, null); // sem stream local, apenas recebe
+            activeCallFromViewer = call;
+            
+            call.on('stream', (remoteStream) => {
+                // Video remoto recebido
+                remoteVideo.srcObject = remoteStream;
+                remoteVideo.style.display = "block";
+                remotePlaceholder.style.display = "none";
+                remoteStreamActive = true;
+                viewerInfoSpan.innerHTML = "🟢 CONECTADO | Assistindo ao vivo";
+                viewerInfoSpan.style.color = "#b3ffa7";
+            });
+            
+            call.on('error', (err) => {
+                console.error("Erro na chamada:", err);
+                viewerInfoSpan.innerHTML = "❌ Falha na conexão. Código inválido ou câmera offline.";
+                viewerInfoSpan.style.color = "#ffaa88";
+                disconnectViewer();
+            });
+            
+            call.on('close', () => {
+                console.log("Transmissor encerrou a conexão");
+                viewerInfoSpan.innerHTML = "🔴 Transmissão finalizada pelo transmissor";
+                viewerInfoSpan.style.color = "#ffae70";
+                disconnectViewer();
+            });
+        });
+        
+        peerViewer.on('error', (err) => {
+            console.error("Erro peer espectador:", err);
+            if (err.type !== 'peer-unavailable') {
+                viewerInfoSpan.innerHTML = "Erro de rede, tente novamente.";
+                disconnectViewer();
+            } else {
+                viewerInfoSpan.innerHTML = "Câmera não encontrada. Verifique o código.";
+                disconnectViewer();
+            }
+        });
+        
+        // timeout para não ficar eternamente
+        setTimeout(() => {
+            if (activeCallFromViewer && !remoteStreamActive) {
+                viewerInfoSpan.innerHTML = "⏰ Timeout: não foi possível conectar à câmera.";
+                disconnectViewer();
+            }
+        }, 15000);
+    }
+    
+    function disconnectViewer() {
+        if (activeCallFromViewer) {
+            try {
+                activeCallFromViewer.close();
+            } catch(e) {}
+            activeCallFromViewer = null;
+        }
+        if (peerViewer && !peerViewer.destroyed) {
+            peerViewer.destroy();
+            peerViewer = null;
+        }
+        remoteVideo.srcObject = null;
+        remoteVideo.style.display = "none";
+        remotePlaceholder.style.display = "flex";
+        remoteStreamActive = false;
+        if (viewerInfoSpan) {
+            viewerInfoSpan.innerHTML = "🟡 Desconectado | Nenhuma transmissão ativa";
+            viewerInfoSpan.style.color = "#ffd29b";
+        }
+        // Limpa input mas mantém o código
+    }
+    
+    // ---------------------- EVENT LISTENERS ---------------------------------
+    // Botão Iniciar Câmera (transmissor)
+    startBtn.addEventListener('click', async () => {
+        // Se já está ativo, reinicia
+        if (localStream && peerTransmitter) {
+            if (confirm("Câmera já está ativa. Deseja reiniciar a transmissão? Todos os espectadores serão desconectados.")) {
+                await stopLocalCameraAndBroadcast();
+                await startTrailCamera();
+            }
+        } else {
+            await startTrailCamera();
+        }
+    });
+    
+    // Parar câmera
+    stopCamBtn.addEventListener('click', async () => {
+        await stopLocalCameraAndBroadcast();
+    });
+    
+    // Copiar ID do transmissor
+    copyIdBtn.addEventListener('click', () => {
+        if (currentPeerId) {
+            navigator.clipboard.writeText(currentPeerId).then(() => {
+                alert("✅ Código da câmera copiado: " + currentPeerId);
+            }).catch(() => {
+                alert("Copie manualmente: " + currentPeerId);
+            });
+        } else {
+            alert("Inicie a câmera primeiro para gerar um código.");
+        }
+    });
+    
+    // Botão assistir (espectador)
+    connectBtn.addEventListener('click', () => {
+        let code = peerCodeInput.value.trim();
+        if (code === "") {
+            alert("Insira o código da câmera de trilha.");
+            return;
+        }
+        connectToCamera(code);
+    });
+    
+    // Desconectar visualização
+    disconnectViewBtn.addEventListener('click', () => {
+        disconnectViewer();
+    });
+    
+    // Ao carregar a página, preparar placeholders e verificar HTTPS
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && !location.hostname.includes('127.0.0.1')) {
+        document.querySelector('.trail-container').style.borderColor = "#aa5a3a";
+        const warnMsg = document.createElement('div');
+        warnMsg.style.backgroundColor = "#ffaa3355";
+        warnMsg.style.padding = "8px";
+        warnMsg.style.borderRadius = "30px";
+        warnMsg.style.marginBottom = "15px";
+        warnMsg.style.textAlign = "center";
+        warnMsg.innerText = "⚠️ Para usar a câmera, acesse via HTTPS (ou localhost). Alguns navegadores bloqueiam getUserMedia sem conexão segura.";
+        document.querySelector('.dashboard').before(warnMsg);
+    }
+    
+    // Verificar se o navegador suporta getUserMedia
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("Seu navegador não suporta acesso à câmera. Use Chrome, Edge ou Safari recentes.");
+        startBtn.disabled = true;
+        startBtn.style.opacity = 0.5;
+    }
+    
+    // Inicializar UI com mensagens
+    updateCamStatus("Desligada", false);
+    remotePlaceholder.style.display = "flex";
+    localPlaceholder.style.display = "flex";
+    localVideo.style.display = "none";
+    remoteVideo.style.display = "none";
+    
+    // Evento de fechar página para liberar recursos
+    window.addEventListener('beforeunload', () => {
+        if (localStream) {
+            localStream.getTracks().forEach(t => t.stop());
+        }
+        if (peerTransmitter && !peerTransmitter.destroyed) peerTransmitter.destroy();
+        if (peerViewer && !peerViewer.destroyed) peerViewer.destroy();
+    });
+    
+    // Instruções visuais: indicar que máximo 4 celulares podem se conectar.
+    console.log("Sistema de Câmera de Trilha pronto. Modo transmissor (câmera traseira) e até 4 espectadores simultâneos.");
+</script>
+</body>
+</html>
